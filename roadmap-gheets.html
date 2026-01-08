@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Kanban with Fullscreen Zoom</title>
+
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Montserrat:wght@800&display=swap" rel="stylesheet">
+
+<style>
+  body {
+    font-family: 'Lato', sans-serif;
+    background: #f3f4f6;
+    margin: 0;
+    padding: 24px;
+  }
+  html {zoom: 125%;}
+  .app { max-width: 1200px; margin: 0 auto; }
+  textarea { width: 100%; min-height: 180px; font-size: 1rem; font-family: 'Lato', sans-serif; }
+  button {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: none;
+    background: #2563eb;
+    color: white;
+    cursor: pointer;
+    font-size: 1rem;
+    font-family: 'Lato', sans-serif;
+  }
+
+  .boards-container { display: flex; flex-direction: column; gap: 18px; }
+
+  .board {
+    background: white;
+    border-radius: 10px;
+    padding: 18px;
+    border: 1px solid #ddd;
+    position: relative;
+    font-family: 'Lato', sans-serif;
+  }
+
+  /* Unified board header: title + controls on one line */
+  .board-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .board-title {
+    margin: 0;
+    font-size: 1.6rem;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  /* PAGE TITLE */
+  h1 {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+  }
+
+  .header-buttons {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .header-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    color: #ccc;
+    cursor: pointer;
+    user-select: none;
+    padding: 0;
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .header-btn svg {
+    width: 50px;
+    height: 36px;
+  }
+
+  .fullscreen {
+    position: fixed !important;
+    top: 0; left: 0; right: 0; bottom: 0;
+    margin: 0;
+    padding: 32px;
+    border-radius: 0 !important;
+    overflow: auto;
+    z-index: 9999;
+    background: white;
+  }
+
+  .logo-bar { display: flex; align-items: center; margin-bottom: 16px; }
+
+  /* Columns layout: grid so Ready for Dev sits under In Development */
+  .columns-wrapper {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* A C D E */
+    column-gap: 12px;
+    row-gap: 12px;
+    font-size: 1rem;
+    font-family: 'Lato', sans-serif;
+  }
+
+  .column {
+    min-width: 0;
+    background: #f9fafb;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Lato', sans-serif;
+  }
+
+  .column-title {
+    margin: 0 0 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    font-family: 'Lato', sans-serif;
+  }
+
+  .card {
+    position: relative;
+    padding: 8px 12px 8px 14px; /* symmetric right padding now that badge is inline */
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-size: 1rem;
+    font-family: 'Lato', sans-serif;
+  }
+
+  /* Base colour bar */
+  .card::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    border-radius: 4px 0 0 4px;
+  }
+
+  /* Status colours */
+  .card-black::before {
+    background: #000; /* black */
+  }
+
+  .card-blue::before {
+    background: #2563eb; /* blue */
+  }
+
+  .card-green::before {
+    background: #16a34a; /* green */
+  }
+
+  .size-badge {
+    position: static;
+    transform: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    margin-left: 2px;
+    margin-bottom: 2px;
+    white-space: nowrap;         /* keep badge itself on one line */
+    font-size: 0.6rem;           /* smaller so it sits more naturally with text */
+    line-height: 1.1;
+    font-weight: 700;
+    font-family: 'Lato', sans-serif;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: #e5e7eb;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    opacity: 0.8;
+  }
+
+  /* Status-specific grid layout:
+     Row 1: Product & Design | In Development | Monitoring | Done
+     Row 2: Product & Design | Ready for Dev  | Monitoring | Done
+  */
+  .status-product-design {
+    grid-column: 1;
+    grid-row: 1 / span 2;  /* A spans both rows */
+  }
+
+  .status-in-development {
+    grid-column: 2;
+    grid-row: 1;           /* C, top row */
+  }
+
+  .status-ready-for-dev {
+    grid-column: 2;
+    grid-row: 2;           /* B, under In Development */
+  }
+
+  .status-monitoring {
+    grid-column: 3;
+    grid-row: 1 / span 2;  /* D spans both rows */
+  }
+
+  .status-done {
+    grid-column: 4;
+    grid-row: 1 / span 2;  /* E spans both rows */
+  }
+
+  .controls-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 8px 0 12px;
+    font-size: 0.85rem;
+    color: #4b5563;
+  }
+
+  .controls-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="logo-bar">
+    <img src="https://collectingcars.com/images/logos/collecting-cars-logo.svg"
+         alt="Collecting Cars"
+         width="380"
+         height="40" />
+  </div>
+
+  <h1>Kanban Board from Google Sheets</h1>
+  <p style="font-size: 12px; color: #4b5563; margin-top: 0; margin-bottom: 8px;">
+    Paste a Google Sheets URL below.
+    <br><strong>Note:</strong> If you get CORS errors, run this file from a local server:
+    <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">python3 -m http.server 8000</code>
+    then open <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">http://localhost:8000/roadmap-csv.html</code>
+  </p>
+  <textarea id="jsonInput" placeholder="https://docs.google.com/spreadsheets/d/..."></textarea>
+
+  <div class="controls-row">
+    <label>
+      <input type="checkbox" id="toggleSizeLabel" />
+      Show T-shirt size labels
+    </label>
+    <!-- you can add more controls here later if needed -->
+  </div>
+
+  <button id="renderBtn">Render boards</button>
+  <div id="boardsContainer" class="boards-container"></div>
+</div>
+
+<script>
+const renderBtn = document.getElementById("renderBtn");
+const boardsContainer = document.getElementById("boardsContainer");
+const inputEl = document.getElementById("jsonInput");
+const sizeToggleEl = document.getElementById("toggleSizeLabel");
+const SHEETS_URL_KEY = "kanban_sheets_url_v1";
+
+/* Load saved input on page load */
+(function restoreInput() {
+  try {
+    const savedUrl = localStorage.getItem(SHEETS_URL_KEY);
+    if (savedUrl !== null) {
+      inputEl.value = savedUrl;
+    }
+  } catch (e) {
+    // localStorage may be unavailable; fail silently
+  }
+})();
+
+/* Save input on any change (typing or paste) */
+inputEl.addEventListener("input", () => {
+  try {
+    const value = inputEl.value.trim();
+    localStorage.setItem(SHEETS_URL_KEY, value);
+  } catch (e) {
+    // Ignore storage errors
+  }
+});
+
+/**
+ * Check if a string is a Google Sheets URL
+ */
+function isGoogleSheetsUrl(str) {
+  return /^https?:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9_-]+/.test(str.trim());
+}
+
+/**
+ * Extract spreadsheet ID from Google Sheets URL
+ */
+function extractSpreadsheetId(url) {
+  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Convert Google Sheets URL to "Publish to web" CSV export URL
+ * This format is more CORS-friendly than the gviz format
+ */
+function getSheetsCsvExportUrl(sheetsUrl) {
+  const spreadsheetId = extractSpreadsheetId(sheetsUrl);
+  if (!spreadsheetId) {
+    throw new Error("Invalid Google Sheets URL");
+  }
+  // Use the export format which is more CORS-friendly
+  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=0`;
+}
+
+/**
+ * Fetch CSV from Google Sheets using multiple methods
+ */
+async function fetchSheetsCsv(sheetsUrl) {
+  const spreadsheetId = extractSpreadsheetId(sheetsUrl);
+  if (!spreadsheetId) {
+    throw new Error("Invalid Google Sheets URL");
+  }
+
+  // Try different export formats
+  const exportFormats = [
+    `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=0`,
+    `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=tsv&gid=0`,
+    `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&tq&gid=0`
+  ];
+
+  // Try direct fetch for each format
+  for (const exportUrl of exportFormats) {
+    try {
+      const response = await fetch(exportUrl, { mode: 'cors' });
+      if (response.ok) {
+        const text = await response.text();
+        if (text && text.trim().length > 0 && !text.includes('Access denied')) {
+          return text;
+        }
+      }
+    } catch (e) {
+      // CORS error - try with proxy
+    }
+
+    // Try with CORS proxy
+    const proxyUrls = [
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(exportUrl)}`,
+      `https://corsproxy.io/?${encodeURIComponent(exportUrl)}`,
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(exportUrl)}`
+    ];
+
+    for (const proxyUrl of proxyUrls) {
+      try {
+        const response = await fetch(proxyUrl, { mode: 'cors' });
+        if (response.ok) {
+          const text = await response.text();
+          if (text && text.trim().length > 0 && !text.includes('Access denied')) {
+            return text;
+          }
+        }
+      } catch (e) {
+        // Try next proxy
+        continue;
+      }
+    }
+  }
+
+  throw new Error("Failed to fetch Google Sheets. This may be due to CORS restrictions. Try:\n1. Publishing the sheet (File > Share > Publish to web > CSV)\n2. Running this HTML file from a web server instead of opening it directly\n3. Using a browser extension to disable CORS (for development only)");
+}
+
+/**
+ * Convert Google Sheets JSON format to CSV-like rows
+ */
+function sheetsJsonToRows(sheetsJson) {
+  if (!sheetsJson.table || !sheetsJson.table.rows) {
+    throw new Error("Invalid Google Sheets JSON format");
+  }
+
+  const table = sheetsJson.table;
+  const cols = table.cols || [];
+  const rows = table.rows || [];
+
+  // Extract headers from column definitions
+  const headers = cols.map((col, idx) => {
+    if (col.label) return col.label;
+    // Fallback: use column index if no label
+    return `Column ${idx + 1}`;
+  });
+
+  // Convert rows to objects
+  const result = [];
+  for (const row of rows) {
+    if (!row.c) continue; // Skip empty rows
+    const rowObj = {};
+    headers.forEach((header, idx) => {
+      const cell = row.c && row.c[idx];
+      rowObj[header] = cell && cell.v !== null && cell.v !== undefined ? String(cell.v) : "";
+    });
+    result.push(rowObj);
+  }
+
+  return result;
+}
+
+/**
+ * Simple CSV line parser supporting quoted fields and commas.
+ */
+function parseCsvLine(line) {
+  const result = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (inQuotes) {
+      if (char === '"') {
+        if (line[i + 1] === '"') {
+          current += '"';
+          i++; // skip escaped quote
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += char;
+      }
+    } else {
+      if (char === '"') {
+        inQuotes = true;
+      } else if (char === ',') {
+        result.push(current);
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+/**
+ * Parse CSV text into an array of row objects keyed by header.
+ */
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length === 0) return [];
+
+  const headerLine = lines[0].replace(/^\uFEFF/, ""); // strip BOM
+  const headers = parseCsvLine(headerLine).map(h => h.trim());
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCsvLine(lines[i]);
+    if (cols.every(c => c.trim() === "")) continue;
+    const row = {};
+    headers.forEach((h, idx) => {
+      row[h] = (cols[idx] || "").trim();
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
+/**
+ * Transform an array of CSV rows into the epic/status JSON structure.
+ * Each item is now an object: { summary, tShirtSize? }
+ */
+function transformBacklogRows(rows) {
+  const MAIN_EPICS = new Set([
+    "Organic Growth",
+    "Europe Growth",
+    "Trust & Security",
+    "Speed to Liquidity"
+  ]);
+
+  const EPIC_KEYS = [
+    "Organic Growth",
+    "Europe Growth",
+    "Other",
+    "Trust & Security",
+    "Speed to Liquidity"
+  ];
+
+  // Map raw status → grouped status
+  const STATUS_MAP = {
+    "SCOPING & DESIGN": "Product & Design",
+    "New": "Product & Design",
+    "READY FOR DEVELOPMENT": "Ready for Dev",
+    "In Development": "In Development",
+    "Monitoring": "Monitoring",
+    "Done": "Done"
+  };
+
+  const STATUS_ORDER = [
+    "Product & Design",
+    "Ready for Dev",
+    "In Development",
+    "Monitoring",
+    "Done"
+  ];
+
+  function makeEmptyEpicBucket() {
+    const epicBucket = {};
+    STATUS_ORDER.forEach(status => {
+      epicBucket[status] = [];
+    });
+    return epicBucket;
+  }
+
+  const result = {};
+  EPIC_KEYS.forEach(epic => {
+    result[epic] = makeEmptyEpicBucket();
+  });
+
+  for (const row of rows) {
+    const summary = (row["Summary"] || "").trim();
+    const statusRaw = (row["Status"] || "").trim();
+    const parentSummary = (row["Parent summary"] || "").trim();
+    const tShirtSizeRaw = (row["Custom field (T-Shirt Size)"] || "").trim();
+
+    if (!summary || !statusRaw) continue;
+
+    const status = STATUS_MAP[statusRaw];
+    if (!status) continue;
+
+    const epic = MAIN_EPICS.has(parentSummary)
+      ? parentSummary
+      : "Other";
+
+    const item = { summary };
+
+    // Only store tShirtSize if it exists; otherwise undefined → no badge
+    if (tShirtSizeRaw) {
+      item.tShirtSize = tShirtSizeRaw;
+    }
+
+    result[epic][status].push(item);
+  }
+
+  return result;
+}
+
+function openFullscreen(board) {
+  board.classList.add("fullscreen");
+}
+
+function closeFullscreen(board) {
+  board.classList.remove("fullscreen");
+}
+
+function navigateBoard(currentBoard, direction) {
+  const boards = Array.from(document.querySelectorAll(".board"));
+  const currentIndex = boards.indexOf(currentBoard);
+  if (currentIndex === -1) return;
+
+  let newIndex = currentIndex + direction;
+  if (newIndex < 0) newIndex = boards.length - 1;
+  if (newIndex >= boards.length) newIndex = 0;
+
+  closeFullscreen(currentBoard);
+  openFullscreen(boards[newIndex]);
+}
+
+/* helper to get the current fullscreen board */
+function getCurrentFullscreenBoard() {
+  return document.querySelector(".board.fullscreen");
+}
+
+/* keyboard navigation for left/right arrows */
+document.addEventListener("keydown", (e) => {
+  const target = e.target;
+  const tag = target.tagName;
+  if (tag === "TEXTAREA" || tag === "INPUT" || target.isContentEditable) {
+    return;
+  }
+
+  const currentBoard = getCurrentFullscreenBoard();
+  if (!currentBoard) return;
+
+  if (e.key === "ArrowLeft") {
+    e.preventDefault();
+    navigateBoard(currentBoard, -1);
+  } else if (e.key === "ArrowRight") {
+    e.preventDefault();
+    navigateBoard(currentBoard, 1);
+  }
+});
+
+renderBtn.addEventListener("click", async () => {
+  const text = inputEl.value.trim();
+  const showSizeLabels = sizeToggleEl.checked; // read checkbox state
+
+  /* Save current input explicitly on render as well */
+  try {
+    localStorage.setItem(SHEETS_URL_KEY, text);
+  } catch (e) {
+    // ignore
+  }
+
+  boardsContainer.innerHTML = "";
+  if (!text) {
+    alert("Please enter a Google Sheets URL");
+    return;
+  }
+
+  if (!isGoogleSheetsUrl(text)) {
+    alert("Please enter a valid Google Sheets URL");
+    return;
+  }
+
+  // Show loading state
+  renderBtn.disabled = true;
+  renderBtn.textContent = "Loading...";
+
+  let data;
+
+  try {
+    // Fetch CSV from Google Sheets
+    const csvText = await fetchSheetsCsv(text);
+    const rows = parseCsv(csvText);
+    
+    if (!rows.length) {
+      alert("Google Sheets appears to be empty or could not be parsed.");
+      renderBtn.disabled = false;
+      renderBtn.textContent = "Render boards";
+      return;
+    }
+    
+    data = transformBacklogRows(rows);
+  } catch (error) {
+    alert(`Error fetching Google Sheets: ${error.message}\n\nTo fix this:\n1. Open your Google Sheet\n2. Go to File > Share > Publish to web\n3. Select "CSV" format and click "Publish"\n4. Make sure the sheet is also shared publicly (Anyone with the link can view)`);
+    renderBtn.disabled = false;
+    renderBtn.textContent = "Render boards";
+    return;
+  } finally {
+    renderBtn.disabled = false;
+    renderBtn.textContent = "Render boards";
+  }
+
+  // Map statuses to colour classes for the cards
+  const STATUS_COLOR_CLASS = {
+    "Product & Design": "card-black",
+    "Monitoring": "card-green",
+    "Ready for Dev": "card-black",
+    "In Development": "card-blue",
+    "Done": "card-green"
+  };
+
+  // Map T-shirt size → slug and label for icon badge
+  const SIZE_LABEL = {
+    xsmall: "XS",
+    small: "S",
+    medium: "M",
+    large: "L",
+    xlarge: "XL"
+  };
+
+  Object.entries(data).forEach(([epic, statuses]) => {
+    const board = document.createElement("div");
+    board.className = "board";
+
+    // Unified header: title + nav
+    const header = document.createElement("div");
+    header.className = "board-header";
+
+    const title = document.createElement("h2");
+    title.className = "board-title";
+    title.textContent = epic;
+
+    const btns = document.createElement("div");
+    btns.className = "header-buttons";
+
+    const leftArrow = document.createElement("div");
+    leftArrow.className = "header-btn";
+    leftArrow.textContent = "◀";
+    leftArrow.onclick = (e) => {
+      e.stopPropagation();
+      navigateBoard(board, -1);
+    };
+
+    const rightArrow = document.createElement("div");
+    rightArrow.className = "header-btn";
+    rightArrow.textContent = "▶";
+    rightArrow.onclick = (e) => {
+      e.stopPropagation();
+      navigateBoard(board, 1);
+    };
+
+    btns.appendChild(leftArrow);
+    btns.appendChild(rightArrow);
+
+    header.appendChild(title);
+    header.appendChild(btns);
+
+    board.appendChild(header);
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "columns-wrapper";
+
+    Object.entries(statuses).forEach(([status, items]) => {
+      const hasItems = items && items.length > 0;
+
+      const col = document.createElement("div");
+      col.className = "column";
+
+      // add a status-based class for grid placement
+      const statusSlug = status
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
+      col.classList.add(`status-${statusSlug}`);
+
+      const st = document.createElement("div");
+      st.className = "column-title";
+      st.textContent = status;
+      col.appendChild(st);
+
+      const colourClass = STATUS_COLOR_CLASS[status] || "";
+
+      if (hasItems) {
+        items.forEach(item => {
+          let summary;
+          let tShirtSize;
+
+          if (typeof item === "string") {
+            // Backwards compatibility with older JSON that just had strings:
+            // treat as "no size" → no badge.
+            summary = item;
+            tShirtSize = "";
+          } else {
+            summary = item.summary || "";
+            tShirtSize = item.tShirtSize || item.size || "";
+          }
+
+          const card = document.createElement("div");
+          card.className =
+            "card" +
+            (colourClass ? " " + colourClass : "");
+
+          // Clean summary so there is no trailing space before the non-breaking space
+          const cleanSummary = (summary || "").replace(/\s+$/,"");
+          const textNode = document.createTextNode(cleanSummary);
+          card.appendChild(textNode);
+
+          // Only add badge (and the non-breaking space) if we actually have a size
+          // AND the user opted to show size labels
+          if (tShirtSize && showSizeLabels) {
+            const sizeKey = String(tShirtSize)
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, ""); // e.g. "X-Small" → "xsmall"
+
+            const sizeLabel = SIZE_LABEL[sizeKey] || tShirtSize;
+
+            // Non-breaking space tying the last word to the badge
+            card.appendChild(document.createTextNode("\u00A0"));
+
+            const badge = document.createElement("span");
+            badge.className = "size-badge size-" + sizeKey;
+            badge.textContent = sizeLabel;
+            card.appendChild(badge);
+          }
+
+          col.appendChild(card);
+        });
+      }
+
+      wrapper.appendChild(col);
+    });
+
+    board.appendChild(wrapper);
+    boardsContainer.appendChild(board);
+  });
+
+  // Immediately go to fullscreen mode on the first board
+  const firstBoard = boardsContainer.querySelector(".board");
+  if (firstBoard) openFullscreen(firstBoard);
+});
+</script>
+
+</body>
+</html>
