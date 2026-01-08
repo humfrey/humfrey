@@ -332,48 +332,61 @@ async function fetchSheetsCsv(sheetsUrl) {
 
   // Try different export formats
   const exportFormats = [
-    `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=0`,
-    `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=tsv&gid=0`,
-    `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&tq&gid=0`
+    { url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=0`, name: 'export?format=csv' },
+    { url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=tsv&gid=0`, name: 'export?format=tsv' },
+    { url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&tq&gid=0`, name: 'gviz/tq?tqx=out:csv' }
   ];
 
   // Try direct fetch for each format
-  for (const exportUrl of exportFormats) {
+  for (const format of exportFormats) {
+    console.log(`[Fetch] Trying direct fetch: ${format.name}`);
     try {
-      const response = await fetch(exportUrl, { mode: 'cors' });
+      const response = await fetch(format.url, { mode: 'cors' });
+      console.log(`[Fetch] Direct fetch response status: ${response.status} ${response.statusText}`);
       if (response.ok) {
         const text = await response.text();
         if (text && text.trim().length > 0 && !text.includes('Access denied')) {
+          console.log(`[Fetch] ✅ SUCCESS: Direct fetch worked with ${format.name}`);
           return text;
+        } else {
+          console.log(`[Fetch] Direct fetch returned empty or denied content for ${format.name}`);
         }
       }
     } catch (e) {
+      console.log(`[Fetch] Direct fetch failed for ${format.name}:`, e.message);
       // CORS error - try with proxy
     }
 
     // Try with CORS proxy
     const proxyUrls = [
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(exportUrl)}`,
-      `https://corsproxy.io/?${encodeURIComponent(exportUrl)}`,
-      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(exportUrl)}`
+      { url: `https://api.allorigins.win/raw?url=${encodeURIComponent(format.url)}`, name: 'allorigins.win' },
+      { url: `https://corsproxy.io/?${encodeURIComponent(format.url)}`, name: 'corsproxy.io' },
+      { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(format.url)}`, name: 'codetabs.com' }
     ];
 
-    for (const proxyUrl of proxyUrls) {
+    for (const proxy of proxyUrls) {
+      console.log(`[Fetch] Trying proxy ${proxy.name} with format ${format.name}`);
       try {
-        const response = await fetch(proxyUrl, { mode: 'cors' });
+        const response = await fetch(proxy.url, { mode: 'cors' });
+        console.log(`[Fetch] Proxy ${proxy.name} response status: ${response.status} ${response.statusText}`);
         if (response.ok) {
           const text = await response.text();
           if (text && text.trim().length > 0 && !text.includes('Access denied')) {
+            console.log(`[Fetch] ✅ SUCCESS: Proxy ${proxy.name} worked with format ${format.name}`);
             return text;
+          } else {
+            console.log(`[Fetch] Proxy ${proxy.name} returned empty or denied content`);
           }
         }
       } catch (e) {
+        console.log(`[Fetch] Proxy ${proxy.name} failed:`, e.message);
         // Try next proxy
         continue;
       }
     }
   }
 
+  console.log(`[Fetch] ❌ All methods failed`);
   throw new Error("Failed to fetch Google Sheets. This may be due to CORS restrictions. Try:\n1. Publishing the sheet (File > Share > Publish to web > CSV)\n2. Running this HTML file from a web server instead of opening it directly\n3. Using a browser extension to disable CORS (for development only)");
 }
 
@@ -490,6 +503,14 @@ function transformBacklogRows(rows) {
     "Speed to Liquidity"
   ];
 
+  // Map parent keys (PT-*) to epic names
+  const PARENT_KEY_TO_EPIC = {
+    "PT-108": "Organic Growth",
+    "PT-94": "Speed to Liquidity",
+    "PT-93": "Europe Growth",
+    "PT-103": "Trust & Security"
+  };
+
   // Map raw status → grouped status
   const STATUS_MAP = {
     "SCOPING & DESIGN": "Product & Design",
@@ -524,17 +545,26 @@ function transformBacklogRows(rows) {
   for (const row of rows) {
     const summary = (row["Summary"] || "").trim();
     const statusRaw = (row["Status"] || "").trim();
+    
+    // Try multiple possible column names for parent info
+    const parentKey = (row["parent"] || row["Parent"] || row["Parent key"] || "").trim();
     const parentSummary = (row["Parent summary"] || "").trim();
-    const tShirtSizeRaw = (row["Custom field (T-Shirt Size)"] || "").trim();
+    
+    // Try multiple possible column names for T-Shirt Size
+    const tShirtSizeRaw = (row["T-Shirt Size"] || row["Custom field (T-Shirt Size)"] || "").trim();
 
     if (!summary || !statusRaw) continue;
 
     const status = STATUS_MAP[statusRaw];
     if (!status) continue;
 
-    const epic = MAIN_EPICS.has(parentSummary)
-      ? parentSummary
-      : "Other";
+    // Determine epic: use parent summary if available, otherwise map from parent key
+    let epic = "Other";
+    if (parentSummary && MAIN_EPICS.has(parentSummary)) {
+      epic = parentSummary;
+    } else if (parentKey && PARENT_KEY_TO_EPIC[parentKey]) {
+      epic = PARENT_KEY_TO_EPIC[parentKey];
+    }
 
     const item = { summary };
 
