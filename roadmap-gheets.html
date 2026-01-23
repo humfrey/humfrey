@@ -394,14 +394,14 @@ function parseCsv(text) {
  */
 function transformBacklogRows(rows) {
   const MAIN_EPICS = new Set([
-    "Organic Growth",
+    "Organic / Paid Growth",
     "Europe Growth",
     "Trust & Security",
     "Speed to Liquidity"
   ]);
 
   const EPIC_KEYS = [
-    "Organic Growth",
+    "Organic / Paid Growth",
     "Europe Growth",
     "Other",
     "Trust & Security",
@@ -410,7 +410,7 @@ function transformBacklogRows(rows) {
 
   // Map parent keys (PT-*) to epic names
   const PARENT_KEY_TO_EPIC = {
-    "PT-108": "Organic Growth",
+    "PT-108": "Organic / Paid Growth",
     "PT-94": "Speed to Liquidity",
     "PT-93": "Europe Growth",
     "PT-103": "Trust & Security"
